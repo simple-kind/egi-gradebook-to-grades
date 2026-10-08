@@ -19,16 +19,28 @@ EXEMPT = 'exempt'
 
 
 def parse_scores(csv_path):
-    """Return {(first, last): {lt_num: raw_grade_str}} from the LT1-LT7 summary rows."""
+    """Return (students, line_text) from the LT1-LT7 summary rows.
+
+    students: {(first, last): {lt_num: raw_grade_str}}
+    line_text: {(first, last): {lt_num: raw_csv_line_str}}, for error messages.
+    """
     students = defaultdict(dict)
+    line_text = defaultdict(dict)
     with open(csv_path, newline='') as f:
-        for row in csv.DictReader(f):
+        raw_lines = f.readlines()
+        f.seek(0)
+        reader = csv.DictReader(f)
+        for row in reader:
             match = LT_PATTERN.match(row['Assignment Title'].strip())
             if not match:
                 continue
             key = (row['First Name'], row['Last Name'])
-            students[key][int(match.group(1))] = row['Grade'].strip()
-    return students
+            lt = int(match.group(1))
+            students[key][lt] = row['Grade'].strip()
+            # ponytail: assumes one physical line per CSV row (true for this export);
+            # a quoted multi-line field would desync this lookup from reader.line_num.
+            line_text[key][lt] = raw_lines[reader.line_num - 1].rstrip('\n')
+    return students, line_text
 
 
 def normalize_score(raw):
@@ -56,18 +68,30 @@ def letter_grade(scores):
     return 'F'
 
 
-def format_student_line(first, last, lt_scores):
-    """lt_scores: {1..7: raw grade str}, missing keys allowed. One formatted output line."""
-    scores = [normalize_score(lt_scores.get(i)) for i in range(1, 8)]
+def format_student_line(first, last, lt_scores, line_text=None):
+    """lt_scores: {1..7: raw grade str}, missing keys allowed. One formatted output line.
+
+    line_text: {1..7: raw csv line str}, included in the error if a grade won't parse.
+    """
+    line_text = line_text or {}
+    scores = []
+    for i in range(1, 8):
+        try:
+            scores.append(normalize_score(lt_scores.get(i)))
+        except ValueError as e:
+            text = line_text.get(i)
+            suffix = f'\n  CSV line: {text}' if text else ''
+            raise ValueError(f'{first} {last}, LT {i}: {e}{suffix}') from e
     display = [f'{s:g}' if s != EXEMPT else '-' for s in scores]
     grade = letter_grade(scores) or 'N/A'
     return f"{first} {last}: {', '.join(display)} -> {grade}"
 
 
 def main(csv_path):
-    students = parse_scores(csv_path)
+    students, line_text = parse_scores(csv_path)
     for first, last in sorted(students, key=lambda key: (key[1], key[0])):
-        print(format_student_line(first, last, students[(first, last)]))
+        key = (first, last)
+        print(format_student_line(first, last, students[key], line_text.get(key)))
 
 
 if __name__ == '__main__':
