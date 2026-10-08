@@ -36,14 +36,73 @@
   #copyBtn { margin-top: 0.5rem; display: none; }
   .error { color: #c0392b; }
   p.note { color: #666; font-size: 0.9rem; }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  #formulaBtn {
+    background: rgba(46, 160, 67, 0.15);
+    border: 1px solid #2ea043;
+    color: #1a7f32;
+    border-radius: 0.4rem;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  #formulaBtn:hover { background: rgba(46, 160, 67, 0.25); }
+  #formulaPanel {
+    display: none;
+    background: rgba(46, 160, 67, 0.08);
+    border: 1px solid rgba(46, 160, 67, 0.4);
+    border-radius: 0.5rem;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+  #formulaPanel.visible { display: block; }
+  #formulaPanel code { background: rgba(128, 128, 128, 0.15); padding: 0.1rem 0.3rem; border-radius: 0.2rem; }
+  #formulaPanel ol { padding-left: 1.2rem; }
 </style>
 </head>
 <body>
-  <h1>Gradebook Grader</h1>
+  <header>
+    <h1>Gradebook Grader</h1>
+    <button id="formulaBtn">Show Formula</button>
+  </header>
   <p class="note">
     Drop a gradebook export CSV below. Everything runs locally in your browser —
     the file is never uploaded anywhere.
   </p>
+
+  <div id="formulaPanel">
+    <strong>How a final letter grade is computed</strong>
+    <ol>
+      <li>For each student, pull their <code>LT 1</code> through <code>LT 7</code> summary-assignment grades (each a 0–4 score).</li>
+      <li>Any LT that's blank or marked <code>exempt</code> is dropped entirely — it doesn't count toward the total, it's not treated as a zero.</li>
+      <li>From the remaining (graded) LTs, compute two fractions:
+        <ul>
+          <li><code>pct_2</code> = fraction of graded LTs scoring ≥ 2</li>
+          <li><code>pct_3</code> = fraction of graded LTs scoring ≥ 3</li>
+        </ul>
+      </li>
+      <li>Apply thresholds, in order:
+        <ul>
+          <li><strong>A</strong>: <code>pct_2 == 1</code> and <code>pct_3 ≥ .66</code> (every graded LT at least a 2, two-thirds at least a 3)</li>
+          <li><strong>B</strong>: <code>pct_2 == 1</code> and <code>pct_3 ≥ .5</code></li>
+          <li><strong>C</strong>: <code>pct_2 ≥ .66</code></li>
+          <li><strong>D</strong>: <code>pct_2 ≥ .5</code></li>
+          <li><strong>F</strong>: otherwise</li>
+        </ul>
+      </li>
+      <li>If every LT is exempt/blank, the student gets no grade (<code>N/A</code>) instead of an F.</li>
+    </ol>
+    <p>No individual LT is weighted more than another — the whole formula is driven by <em>how many</em> LTs clear the 2 and 3 bars, not a weighted average.</p>
+  </div>
 
   <div id="dropzone">
     Drag &amp; drop a CSV file here, or click to choose one
@@ -55,6 +114,12 @@
 
   <script src="grader.js"></script>
   <script>
+    const formulaBtn = document.getElementById('formulaBtn');
+    const formulaPanel = document.getElementById('formulaPanel');
+    formulaBtn.addEventListener('click', () => {
+      formulaPanel.classList.toggle('visible');
+    });
+
     const dropzone = document.getElementById('dropzone');
     const fileInput = document.getElementById('fileInput');
     const output = document.getElementById('output');
